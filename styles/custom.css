@@ -1,0 +1,37 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Roboto+Mono&display=swap');
+
+.stApp {
+    font-family: 'Inter', sans-serif;
+}
+
+.profit {
+    color: #4CAF50 !important;
+}
+
+.loss {
+    color: #FF5252 !important;
+}
+
+.trading-card {
+    background: white;
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.metric-container {
+    background: #f8f9fa;
+    padding: 8px;
+    border-radius: 4px;
+    margin: 4px 0;
+}
+
+.stock-header {
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 16px;
+}
+
+code {
+    font-family: 'Roboto Mono', monospace;
+}
