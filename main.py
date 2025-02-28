@@ -13,6 +13,7 @@ from models.portfolio import Position
 from utils.portfolio_manager import PortfolioManager
 from utils.paper_trading_manager import PaperTradingManager, AssetType, OrderSide, OrderType
 from utils.news_analyzer import NewsAnalyzer
+from utils.stock_screener import StockScreener # Add after the existing imports
 
 # Initialize database
 Base.metadata.create_all(bind=engine)
@@ -77,35 +78,92 @@ if tab == "Market Analysis":
     else:
         st.sidebar.subheader("Stock Screener")
 
-        # Screener criteria
-        price_range = st.sidebar.slider(
-            "Price Range ($)",
-            min_value=0,
-            max_value=1000,
-            value=(0, 500)
+        screener = StockScreener()
+        screener_mode = st.sidebar.selectbox(
+            "Screener Mode",
+            ["Quick Scan", "Technical Patterns", "Custom Filter"]
         )
 
-        volume_min = st.sidebar.number_input(
-            "Minimum Volume",
-            min_value=0,
-            value=100000
-        )
+        if screener_mode == "Quick Scan":
+            if st.sidebar.button("Find Top Movers"):
+                with st.spinner("Scanning market movements..."):
+                    movers = screener.get_top_movers()
 
-        rsi_range = st.sidebar.slider(
-            "RSI Range",
-            min_value=0,
-            max_value=100,
-            value=(30, 70)
-        )
+                    st.subheader("Top Gainers")
+                    gainers_df = pd.DataFrame(movers['gainers'])
+                    st.dataframe(gainers_df)
 
-        if st.sidebar.button("Run Screener"):
-            screening_criteria = {
-                'price': {'min': price_range[0], 'max': price_range[1]},
-                'volume': {'min': volume_min},
-                'rsi': {'min': rsi_range[0], 'max': rsi_range[1]}
-            }
-            # Here you would implement the stock screening logic
-            st.info("Stock screening feature coming soon!")
+                    st.subheader("Top Losers")
+                    losers_df = pd.DataFrame(movers['losers'])
+                    st.dataframe(losers_df)
+
+        elif screener_mode == "Technical Patterns":
+            pattern_symbols = st.sidebar.text_input(
+                "Enter symbols to scan (comma-separated)",
+                value="AAPL,MSFT,GOOGL"
+            ).split(',')
+
+            if st.sidebar.button("Scan Patterns"):
+                with st.spinner("Scanning for technical patterns..."):
+                    patterns = screener.scan_technical_patterns(pattern_symbols)
+                    if patterns:
+                        st.subheader("Technical Patterns Found")
+                        for result in patterns:
+                            st.markdown(f"""
+                            **{result['symbol']}** - Price: ${result['last_price']:.2f}
+                            - Patterns: {', '.join(result['patterns'])}
+                            """)
+                    else:
+                        st.info("No significant patterns found")
+
+        else:  # Custom Filter
+            with st.sidebar.expander("Price Criteria"):
+                price_range = st.slider(
+                    "Price Range ($)",
+                    min_value=0,
+                    max_value=1000,
+                    value=(0, 500)
+                )
+
+            with st.sidebar.expander("Volume Criteria"):
+                min_volume = st.number_input(
+                    "Minimum Volume",
+                    min_value=0,
+                    value=100000
+                )
+
+            with st.sidebar.expander("Technical Indicators"):
+                rsi_range = st.slider(
+                    "RSI Range",
+                    min_value=0,
+                    max_value=100,
+                    value=(30, 70)
+                )
+
+                macd_range = st.slider(
+                    "MACD Range",
+                    min_value=-10.0,
+                    max_value=10.0,
+                    value=(-5.0, 5.0)
+                )
+
+            if st.sidebar.button("Run Custom Screen"):
+                with st.spinner("Filtering stocks..."):
+                    criteria = {
+                        'price': {'min': price_range[0], 'max': price_range[1]},
+                        'volume': {'min': min_volume},
+                        'rsi': {'min': rsi_range[0], 'max': rsi_range[1]},
+                        'macd': {'min': macd_range[0], 'max': macd_range[1]}
+                    }
+
+                    results = screener.filter_stocks(criteria)
+                    if results:
+                        st.subheader("Screening Results")
+                        results_df = pd.DataFrame(results)
+                        st.dataframe(results_df)
+                    else:
+                        st.info("No stocks match the selected criteria")
+
 
     try:
         # Fetch Data
