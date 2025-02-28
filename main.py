@@ -10,6 +10,7 @@ from utils.technical_analysis import calculate_indicators, generate_signals
 from utils.database import get_db, engine, Base
 from utils.portfolio_manager import PortfolioManager
 from models.portfolio import Position
+from utils.paper_trading_manager import PaperTradingManager, AssetType, OrderSide, OrderType
 
 # Initialize database
 Base.metadata.create_all(bind=engine)
@@ -35,10 +36,11 @@ if 'portfolio_id' not in st.session_state:
 # Initialize PortfolioManager
 db = next(get_db())
 portfolio_manager = PortfolioManager(db)
+paper_trading_manager = PaperTradingManager(db)
 
 # Sidebar
 st.sidebar.title("Stock Analysis")
-tab = st.sidebar.radio("Navigation", ["Market Analysis", "Portfolio", "Watchlist"])
+tab = st.sidebar.radio("Navigation", ["Market Analysis", "Portfolio", "Paper Trading", "Watchlist"])
 
 if tab == "Market Analysis":
     # Stock Analysis Section
@@ -225,6 +227,74 @@ elif tab == "Portfolio":
 
     else:
         st.info("No positions in portfolio. Add some stocks to get started!")
+
+elif tab == "Paper Trading":
+    st.title("Paper Trading")
+
+    # Initialize paper trading account if not exists
+    if 'paper_account_id' not in st.session_state:
+        account = paper_trading_manager.create_paper_account(st.session_state.user_id)
+        st.session_state.paper_account_id = account.id
+
+    # Get account information
+    balance = paper_trading_manager.get_account_balance(st.session_state.paper_account_id)
+    positions = paper_trading_manager.get_positions(st.session_state.paper_account_id)
+
+    # Display account summary
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Paper Trading Balance", f"${balance:,.2f}")
+
+    # Trading interface
+    st.subheader("New Trade")
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        symbol = st.text_input("Symbol", value="AAPL").upper()
+        asset_type = st.selectbox("Asset Type", ["Stock", "Crypto", "Option"])
+
+    with col2:
+        order_side = st.selectbox("Order Type", ["Buy", "Sell", "Short"])
+        quantity = st.number_input("Quantity", min_value=0.0, step=0.1)
+
+    with col3:
+        current_price = get_stock_data(symbol, '1d')['Close'].iloc[-1]
+        st.metric("Current Price", f"${current_price:.2f}")
+        if st.button("Place Order"):
+            try:
+                order = paper_trading_manager.place_order(
+                    account_id=st.session_state.paper_account_id,
+                    symbol=symbol,
+                    order_side=OrderSide(order_side.lower()),
+                    quantity=quantity,
+                    price=current_price,
+                    asset_type=AssetType(asset_type.lower())
+                )
+                st.success(f"Order placed successfully: {order_side} {quantity} {symbol}")
+            except Exception as e:
+                st.error(f"Error placing order: {str(e)}")
+
+    # Display positions
+    if positions:
+        st.subheader("Current Positions")
+        # Update position values
+        paper_trading_manager.update_positions_value(st.session_state.paper_account_id)
+
+        position_data = []
+        for position in positions:
+            position_data.append({
+                'Symbol': position.symbol,
+                'Type': position.asset_type.value,
+                'Quantity': position.quantity,
+                'Avg Price': f"${position.average_price:.2f}",
+                'Current Price': f"${position.current_price:.2f}",
+                'P/L': f"${position.unrealized_pnl:.2f}"
+            })
+
+        df_positions = pd.DataFrame(position_data)
+        st.dataframe(df_positions, use_container_width=True)
+    else:
+        st.info("No open positions. Start trading to build your portfolio!")
 
 elif tab == "Watchlist":
     st.title("Watchlist")
