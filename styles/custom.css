@@ -1,9 +1,11 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Roboto+Mono&display=swap');
 
+/* Base styles */
 .stApp {
     font-family: 'Inter', sans-serif;
 }
 
+/* Theme-independent colors */
 .profit {
     color: #4CAF50 !important;
 }
@@ -12,26 +14,98 @@
     color: #FF5252 !important;
 }
 
+/* Cards and containers */
 .trading-card {
-    background: white;
     border-radius: 8px;
     padding: 16px;
+    margin-bottom: 16px;
+    transition: all 0.3s ease;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
-.metric-container {
-    background: #f8f9fa;
-    padding: 8px;
-    border-radius: 4px;
-    margin: 4px 0;
+[data-testid="stSidebar"] {
+    background-color: var(--secondary-background-color);
+    border-right: 1px solid rgba(0,0,0,0.1);
 }
 
+/* Dark mode support */
+[data-theme="dark"] .trading-card {
+    background: #2D2D2D;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+[data-theme="dark"] [data-testid="stSidebar"] {
+    border-right: 1px solid rgba(255,255,255,0.1);
+}
+
+/* Headers and text */
 .stock-header {
     font-size: 24px;
     font-weight: 600;
     margin-bottom: 16px;
 }
 
+.metric-container {
+    background: var(--secondary-background-color);
+    padding: 8px;
+    border-radius: 4px;
+    margin: 4px 0;
+}
+
+/* Chart customization */
+.js-plotly-plot {
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+/* Code blocks */
 code {
     font-family: 'Roboto Mono', monospace;
+    padding: 2px 4px;
+    border-radius: 4px;
+    background: var(--secondary-background-color);
+}
+
+/* Interactive elements */
+.stButton>button {
+    border-radius: 20px;
+    padding: 4px 20px;
+    transition: all 0.3s ease;
+}
+
+.stButton>button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* News cards */
+.news-card {
+    padding: 16px;
+    border-radius: 8px;
+    margin: 8px 0;
+    transition: all 0.3s ease;
+}
+
+.news-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--background-color);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--primary-color);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-color);
 }

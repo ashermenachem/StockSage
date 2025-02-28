@@ -8,4 +8,11 @@ primaryColor = "#1E88E5"
 backgroundColor = "#F8F9FA"
 secondaryBackgroundColor = "#ffffff"
 textColor = "#212121"
-font = "Inter"
+font = "sans serif"
+
+# Dark mode colors
+[theme.dark]
+primaryColor = "#1E88E5"
+backgroundColor = "#1A1A1A"
+secondaryBackgroundColor = "#2D2D2D"
+textColor = "#FFFFFF"
