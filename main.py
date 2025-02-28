@@ -4,12 +4,13 @@ from plotly.subplots import make_subplots
 import pandas as pd
 from datetime import datetime
 import numpy as np
+from typing import List, Optional
 
 from utils.stock_data import get_stock_data, get_company_info
 from utils.technical_analysis import calculate_indicators, generate_signals
 from utils.database import get_db, engine, Base
-from utils.portfolio_manager import PortfolioManager
 from models.portfolio import Position
+from utils.portfolio_manager import PortfolioManager
 from utils.paper_trading_manager import PaperTradingManager, AssetType, OrderSide, OrderType
 
 # Initialize database
@@ -43,21 +44,75 @@ st.sidebar.title("Stock Analysis")
 tab = st.sidebar.radio("Navigation", ["Market Analysis", "Portfolio", "Paper Trading", "Watchlist"])
 
 if tab == "Market Analysis":
-    # Stock Analysis Section
-    symbol = st.sidebar.text_input("Enter Stock Symbol", value="AAPL").upper()
+    # Left sidebar for analysis controls
+    st.sidebar.subheader("Analysis Settings")
+
+    # More timeframe options
     period = st.sidebar.selectbox(
         "Select Time Period",
-        options=['1mo', '3mo', '6mo', '1y', '2y', '5y'],
+        options=['1d', '5d', '1mo', '3mo', '6mo', '1y', '2y', '5y', 'ytd', 'max'],
         index=3
     )
+
+    # Indicator selection
+    available_indicators = [
+        'SMA', 'EMA', 'MACD', 'RSI', 'Bollinger',
+        'Stochastic', 'Williams', 'ATR', 'Volume', 'Ichimoku'
+    ]
+    selected_indicators = st.sidebar.multiselect(
+        "Select Technical Indicators",
+        options=available_indicators,
+        default=['SMA', 'MACD', 'RSI', 'Bollinger']
+    )
+
+    # Stock selection methods
+    search_method = st.sidebar.radio(
+        "Stock Search Method",
+        ["Symbol Search", "Stock Screener"]
+    )
+
+    if search_method == "Symbol Search":
+        symbol = st.sidebar.text_input("Enter Stock Symbol", value="AAPL").upper()
+    else:
+        st.sidebar.subheader("Stock Screener")
+
+        # Screener criteria
+        price_range = st.sidebar.slider(
+            "Price Range ($)",
+            min_value=0,
+            max_value=1000,
+            value=(0, 500)
+        )
+
+        volume_min = st.sidebar.number_input(
+            "Minimum Volume",
+            min_value=0,
+            value=100000
+        )
+
+        rsi_range = st.sidebar.slider(
+            "RSI Range",
+            min_value=0,
+            max_value=100,
+            value=(30, 70)
+        )
+
+        if st.sidebar.button("Run Screener"):
+            screening_criteria = {
+                'price': {'min': price_range[0], 'max': price_range[1]},
+                'volume': {'min': volume_min},
+                'rsi': {'min': rsi_range[0], 'max': rsi_range[1]}
+            }
+            # Here you would implement the stock screening logic
+            st.info("Stock screening feature coming soon!")
 
     try:
         # Fetch Data
         df = get_stock_data(symbol, period)
         info = get_company_info(symbol)
 
-        # Calculate indicators
-        df = calculate_indicators(df)
+        # Calculate indicators with selected ones
+        df = calculate_indicators(df, selected_indicators)
         df = generate_signals(df)
 
         # Main layout
@@ -81,110 +136,149 @@ if tab == "Market Analysis":
         with col3:
             st.metric("Market Cap", f"${info['market_cap']:,.0f}")
 
-        # Create main chart
-        fig = make_subplots(rows=2, cols=1, row_heights=[0.7, 0.3],
-                            shared_xaxes=True, vertical_spacing=0.03)
-
-        # Candlestick chart
-        candlestick = go.Candlestick(
-            x=df.index,
-            open=df['Open'],
-            high=df['High'],
-            low=df['Low'],
-            close=df['Close'],
-            name="OHLC"
-        )
-        fig.add_trace(candlestick, row=1, col=1)
-
-        # Add Moving Averages
-        fig.add_trace(go.Scatter(x=df.index, y=df['SMA_20'], name='SMA 20',
-                                line=dict(color='#1E88E5', width=1)), row=1, col=1)
-        fig.add_trace(go.Scatter(x=df.index, y=df['SMA_50'], name='SMA 50',
-                                line=dict(color='#FF5252', width=1)), row=1, col=1)
-
-        # Add Bollinger Bands
-        fig.add_trace(go.Scatter(x=df.index, y=df['BB_High'], name='BB Upper',
-                                line=dict(color='gray', width=1, dash='dash')), row=1, col=1)
-        fig.add_trace(go.Scatter(x=df.index, y=df['BB_Low'], name='BB Lower',
-                                line=dict(color='gray', width=1, dash='dash')), row=1, col=1)
-
-        # Add buy/sell markers
-        buy_signals = df[df['Signal'] == 'BUY'].index
-        sell_signals = df[df['Signal'] == 'SELL'].index
-
-        fig.add_trace(go.Scatter(
-            x=buy_signals,
-            y=df.loc[buy_signals, 'Low'] * 0.99,
-            mode='markers',
-            name='Buy Signal',
-            marker=dict(symbol='triangle-up', size=15, color='#4CAF50'),
-        ), row=1, col=1)
-
-        fig.add_trace(go.Scatter(
-            x=sell_signals,
-            y=df.loc[sell_signals, 'High'] * 1.01,
-            mode='markers',
-            name='Sell Signal',
-            marker=dict(symbol='triangle-down', size=15, color='#FF5252'),
-        ), row=1, col=1)
-
-        # Volume bars
-        colors = ['#FF5252' if row['Open'] > row['Close'] else '#4CAF50' for index, row in df.iterrows()]
-        fig.add_trace(go.Bar(x=df.index, y=df['Volume'], name='Volume',
-                            marker_color=colors), row=2, col=1)
-
-        # Update layout
-        fig.update_layout(
-            height=800,
-            showlegend=True,
-            xaxis_rangeslider_visible=False,
-            template='plotly_white'
-        )
-
-        st.plotly_chart(fig, use_container_width=True)
-
-        # Technical Indicators Section
-        st.subheader("Technical Indicators")
-        col1, col2, col3 = st.columns(3)
-
-        with col1:
-            st.markdown("<div class='trading-card'>", unsafe_allow_html=True)
-            st.metric("RSI", f"{df['RSI'].iloc[-1]:.2f}")
-            rsi_status = "Overbought" if df['RSI'].iloc[-1] > 70 else "Oversold" if df['RSI'].iloc[-1] < 30 else "Neutral"
-            st.markdown(f"Status: {rsi_status}")
-            st.markdown("</div>", unsafe_allow_html=True)
-
-        with col2:
-            st.markdown("<div class='trading-card'>", unsafe_allow_html=True)
-            macd_signal = "Bullish" if df['MACD'].iloc[-1] > df['MACD_Signal'].iloc[-1] else "Bearish"
-            st.metric("MACD", f"{df['MACD'].iloc[-1]:.2f}")
-            st.markdown(f"Signal: {macd_signal}")
-            st.markdown("</div>", unsafe_allow_html=True)
-
-        with col3:
+        # Trading Signal Card
+        signal_col1, signal_col2 = st.columns(2)
+        with signal_col1:
             st.markdown("<div class='trading-card'>", unsafe_allow_html=True)
             current_signal = df['Signal'].iloc[-1]
+            signal_strength = df['Signal_Strength'].iloc[-1]
             signal_color = "#4CAF50" if current_signal == "BUY" else "#FF5252" if current_signal == "SELL" else "#1E88E5"
-            st.metric("Trading Signal", current_signal)
-            st.markdown(f"Based on technical analysis")
+
+            st.markdown(f"<h3 style='color: {signal_color}'>Trading Signal: {current_signal}</h3>", unsafe_allow_html=True)
+            st.markdown(f"Signal Strength: {signal_strength:.1f}/3")
+            st.markdown("Based on multiple technical indicators")
             st.markdown("</div>", unsafe_allow_html=True)
 
-        # Trading Actions
-        st.subheader("Trading Actions")
-        col1, col2 = st.columns(2)
+        # Create main chart
+        chart_container = st.container()
+        with chart_container:
+            # Chart type selection
+            chart_type = st.radio(
+                "Chart Type",
+                ["Candlestick", "Line", "Area"],
+                horizontal=True
+            )
 
-        with col1:
-            shares = st.number_input("Number of Shares", min_value=0.0, step=0.1)
+            fig = make_subplots(rows=2, cols=1, row_heights=[0.7, 0.3],
+                                shared_xaxes=True, vertical_spacing=0.03)
 
-        with col2:
-            if st.button("Add to Portfolio"):
-                portfolio_manager.add_position(
-                    st.session_state.portfolio_id,
-                    symbol,
-                    shares,
-                    current_price
-                )
-                st.success(f"Added {shares} shares of {symbol} to portfolio")
+            # Main price chart
+            if chart_type == "Candlestick":
+                fig.add_trace(go.Candlestick(
+                    x=df.index,
+                    open=df['Open'],
+                    high=df['High'],
+                    low=df['Low'],
+                    close=df['Close'],
+                    name="OHLC"
+                ), row=1, col=1)
+            elif chart_type == "Line":
+                fig.add_trace(go.Scatter(
+                    x=df.index,
+                    y=df['Close'],
+                    name="Price",
+                    line=dict(color='#1E88E5')
+                ), row=1, col=1)
+            else:  # Area
+                fig.add_trace(go.Scatter(
+                    x=df.index,
+                    y=df['Close'],
+                    name="Price",
+                    fill='tozeroy',
+                    line=dict(color='#1E88E5')
+                ), row=1, col=1)
+
+            # Add selected indicators
+            if 'SMA' in selected_indicators:
+                for ma in ['SMA_20', 'SMA_50', 'SMA_200']:
+                    if ma in df.columns:
+                        fig.add_trace(go.Scatter(
+                            x=df.index,
+                            y=df[ma],
+                            name=ma,
+                            line=dict(dash='dash')
+                        ), row=1, col=1)
+
+            if 'Bollinger' in selected_indicators:
+                for band in ['BB_High', 'BB_Low', 'BB_Mid']:
+                    if band in df.columns:
+                        fig.add_trace(go.Scatter(
+                            x=df.index,
+                            y=df[band],
+                            name=band,
+                            line=dict(dash='dash')
+                        ), row=1, col=1)
+
+            # Add buy/sell markers
+            buy_signals = df[df['Signal'] == 'BUY'].index
+            sell_signals = df[df['Signal'] == 'SELL'].index
+
+            fig.add_trace(go.Scatter(
+                x=buy_signals,
+                y=df.loc[buy_signals, 'Low'] * 0.99,
+                mode='markers',
+                name='Buy Signal',
+                marker=dict(symbol='triangle-up', size=15, color='#4CAF50'),
+            ), row=1, col=1)
+
+            fig.add_trace(go.Scatter(
+                x=sell_signals,
+                y=df.loc[sell_signals, 'High'] * 1.01,
+                mode='markers',
+                name='Sell Signal',
+                marker=dict(symbol='triangle-down', size=15, color='#FF5252'),
+            ), row=1, col=1)
+
+            # Volume chart
+            colors = ['#FF5252' if row['Open'] > row['Close'] else '#4CAF50' for index, row in df.iterrows()]
+            fig.add_trace(go.Bar(
+                x=df.index,
+                y=df['Volume'],
+                name='Volume',
+                marker_color=colors
+            ), row=2, col=1)
+
+            # Update layout
+            fig.update_layout(
+                height=800,
+                showlegend=True,
+                xaxis_rangeslider_visible=False,
+                template='plotly_white'
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+            # Technical Indicators Section
+            st.subheader("Technical Indicators")
+            indicator_cols = st.columns(3)
+
+            # RSI
+            if 'RSI' in selected_indicators:
+                with indicator_cols[0]:
+                    st.markdown("<div class='trading-card'>", unsafe_allow_html=True)
+                    st.metric("RSI", f"{df['RSI'].iloc[-1]:.2f}")
+                    rsi_status = "Overbought" if df['RSI'].iloc[-1] > 70 else "Oversold" if df['RSI'].iloc[-1] < 30 else "Neutral"
+                    st.markdown(f"Status: {rsi_status}")
+                    st.markdown("</div>", unsafe_allow_html=True)
+
+            # MACD
+            if 'MACD' in selected_indicators:
+                with indicator_cols[1]:
+                    st.markdown("<div class='trading-card'>", unsafe_allow_html=True)
+                    macd_signal = "Bullish" if df['MACD'].iloc[-1] > df['MACD_Signal'].iloc[-1] else "Bearish"
+                    st.metric("MACD", f"{df['MACD'].iloc[-1]:.2f}")
+                    st.markdown(f"Signal: {macd_signal}")
+                    st.markdown("</div>", unsafe_allow_html=True)
+
+            # Volume Analysis
+            if 'Volume' in selected_indicators:
+                with indicator_cols[2]:
+                    st.markdown("<div class='trading-card'>", unsafe_allow_html=True)
+                    avg_volume = df['Volume'].mean()
+                    current_volume = df['Volume'].iloc[-1]
+                    volume_change = (current_volume - avg_volume) / avg_volume * 100
+                    st.metric("Volume", f"{current_volume:,.0f}", f"{volume_change:.1f}%")
+                    st.markdown("</div>", unsafe_allow_html=True)
 
     except Exception as e:
         st.error(f"Error: {str(e)}")
