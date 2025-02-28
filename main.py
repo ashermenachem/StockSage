@@ -12,6 +12,7 @@ from utils.database import get_db, engine, Base
 from models.portfolio import Position
 from utils.portfolio_manager import PortfolioManager
 from utils.paper_trading_manager import PaperTradingManager, AssetType, OrderSide, OrderType
+from utils.news_analyzer import NewsAnalyzer
 
 # Initialize database
 Base.metadata.create_all(bind=engine)
@@ -248,37 +249,82 @@ if tab == "Market Analysis":
 
             st.plotly_chart(fig, use_container_width=True)
 
-            # Technical Indicators Section
-            st.subheader("Technical Indicators")
-            indicator_cols = st.columns(3)
+        # News Section
+        st.subheader("Market News & Sentiment")
+        news_tabs = st.tabs(["Stock News", "Market News"])
 
-            # RSI
-            if 'RSI' in selected_indicators:
-                with indicator_cols[0]:
-                    st.markdown("<div class='trading-card'>", unsafe_allow_html=True)
-                    st.metric("RSI", f"{df['RSI'].iloc[-1]:.2f}")
-                    rsi_status = "Overbought" if df['RSI'].iloc[-1] > 70 else "Oversold" if df['RSI'].iloc[-1] < 30 else "Neutral"
-                    st.markdown(f"Status: {rsi_status}")
-                    st.markdown("</div>", unsafe_allow_html=True)
+        # Initialize news analyzer
+        news_analyzer = NewsAnalyzer()
 
-            # MACD
-            if 'MACD' in selected_indicators:
-                with indicator_cols[1]:
-                    st.markdown("<div class='trading-card'>", unsafe_allow_html=True)
-                    macd_signal = "Bullish" if df['MACD'].iloc[-1] > df['MACD_Signal'].iloc[-1] else "Bearish"
-                    st.metric("MACD", f"{df['MACD'].iloc[-1]:.2f}")
-                    st.markdown(f"Signal: {macd_signal}")
-                    st.markdown("</div>", unsafe_allow_html=True)
+        with news_tabs[0]:
+            # Stock-specific news
+            if 'symbol' in locals():
+                stock_news = news_analyzer.get_stock_news(info['name'])
+                if stock_news:
+                    for article in stock_news:
+                        with st.container():
+                            st.markdown(f"""
+                            <div style='padding: 10px; border-left: 4px solid {article['sentiment_color']}; margin: 10px 0;'>
+                            <h4>{article['title']}</h4>
+                            <p>{article['description']}</p>
+                            <p><small>Source: {article['source']} | 
+                            Sentiment: {article['sentiment']} ({article['sentiment_score']:.2f})</small></p>
+                            <a href='{article['url']}' target='_blank'>Read more</a>
+                            </div>
+                            """, unsafe_allow_html=True)
+                else:
+                    st.info("No recent news found for this stock.")
 
-            # Volume Analysis
-            if 'Volume' in selected_indicators:
-                with indicator_cols[2]:
-                    st.markdown("<div class='trading-card'>", unsafe_allow_html=True)
-                    avg_volume = df['Volume'].mean()
-                    current_volume = df['Volume'].iloc[-1]
-                    volume_change = (current_volume - avg_volume) / avg_volume * 100
-                    st.metric("Volume", f"{current_volume:,.0f}", f"{volume_change:.1f}%")
-                    st.markdown("</div>", unsafe_allow_html=True)
+        with news_tabs[1]:
+            # General market news
+            market_news = news_analyzer.get_market_news()
+            if market_news:
+                for article in market_news:
+                    with st.container():
+                        st.markdown(f"""
+                        <div style='padding: 10px; border-left: 4px solid {article['sentiment_color']}; margin: 10px 0;'>
+                        <h4>{article['title']}</h4>
+                        <p>{article['description']}</p>
+                        <p><small>Source: {article['source']} | 
+                        Sentiment: {article['sentiment']} ({article['sentiment_score']:.2f})</small></p>
+                        <a href='{article['url']}' target='_blank'>Read more</a>
+                        </div>
+                        """, unsafe_allow_html=True)
+            else:
+                st.info("No recent market news found.")
+
+
+        # Technical Indicators Section
+        st.subheader("Technical Indicators")
+        indicator_cols = st.columns(3)
+
+        # RSI
+        if 'RSI' in selected_indicators:
+            with indicator_cols[0]:
+                st.markdown("<div class='trading-card'>", unsafe_allow_html=True)
+                st.metric("RSI", f"{df['RSI'].iloc[-1]:.2f}")
+                rsi_status = "Overbought" if df['RSI'].iloc[-1] > 70 else "Oversold" if df['RSI'].iloc[-1] < 30 else "Neutral"
+                st.markdown(f"Status: {rsi_status}")
+                st.markdown("</div>", unsafe_allow_html=True)
+
+        # MACD
+        if 'MACD' in selected_indicators:
+            with indicator_cols[1]:
+                st.markdown("<div class='trading-card'>", unsafe_allow_html=True)
+                macd_signal = "Bullish" if df['MACD'].iloc[-1] > df['MACD_Signal'].iloc[-1] else "Bearish"
+                st.metric("MACD", f"{df['MACD'].iloc[-1]:.2f}")
+                st.markdown(f"Signal: {macd_signal}")
+                st.markdown("</div>", unsafe_allow_html=True)
+
+        # Volume Analysis
+        if 'Volume' in selected_indicators:
+            with indicator_cols[2]:
+                st.markdown("<div class='trading-card'>", unsafe_allow_html=True)
+                avg_volume = df['Volume'].mean()
+                current_volume = df['Volume'].iloc[-1]
+                volume_change = (current_volume - avg_volume) / avg_volume * 100
+                st.metric("Volume", f"{current_volume:,.0f}", f"{volume_change:.1f}%")
+                st.markdown("</div>", unsafe_allow_html=True)
 
     except Exception as e:
         st.error(f"Error: {str(e)}")
