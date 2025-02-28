@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from models.portfolio import User, Portfolio, Position, Transaction, WatchlistItem
 from datetime import datetime
 from typing import List, Optional
+import numpy as np
 
 class PortfolioManager:
     def __init__(self, db: Session):
@@ -22,6 +23,10 @@ class PortfolioManager:
         return portfolio
 
     def add_position(self, portfolio_id: int, symbol: str, shares: float, price: float) -> Position:
+        # Convert numpy types to Python native types
+        shares = float(shares) if isinstance(shares, np.floating) else shares
+        price = float(price) if isinstance(price, np.floating) else price
+
         position = Position(
             portfolio_id=portfolio_id,
             symbol=symbol,
@@ -31,7 +36,7 @@ class PortfolioManager:
         self.db.add(position)
         self.db.commit()
         self.db.refresh(position)
-        
+
         # Record the transaction
         transaction = Transaction(
             position_id=position.id,
@@ -41,20 +46,24 @@ class PortfolioManager:
         )
         self.db.add(transaction)
         self.db.commit()
-        
+
         return position
 
     def update_position(self, position_id: int, shares_change: float, price: float):
+        # Convert numpy types to Python native types
+        shares_change = float(shares_change) if isinstance(shares_change, np.floating) else shares_change
+        price = float(price) if isinstance(price, np.floating) else price
+
         position = self.db.query(Position).filter(Position.id == position_id).first()
         if position:
             transaction_type = "BUY" if shares_change > 0 else "SELL"
-            
+
             # Update position
             position.shares += shares_change
             new_total = (position.shares * position.average_price) + (shares_change * price)
             position.average_price = new_total / position.shares if position.shares > 0 else 0
             position.last_updated = datetime.utcnow()
-            
+
             # Record transaction
             transaction = Transaction(
                 position_id=position.id,
@@ -74,6 +83,9 @@ class PortfolioManager:
         return total_value
 
     def add_to_watchlist(self, user_id: int, symbol: str, price_alert: Optional[float] = None) -> WatchlistItem:
+        # Convert numpy types to Python native types
+        price_alert = float(price_alert) if isinstance(price_alert, np.floating) else price_alert
+
         item = WatchlistItem(user_id=user_id, symbol=symbol, price_alert=price_alert)
         self.db.add(item)
         self.db.commit()
