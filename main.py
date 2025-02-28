@@ -75,6 +75,10 @@ if tab == "📊 View Stock Charts":
                 f"{price_change_pct:.2f}%"
             )
 
+        # Calculate technical indicators and generate signals
+        df = calculate_indicators(df, ['SMA', 'EMA', 'MACD', 'RSI', 'Bollinger', 'Volume'])
+        df = generate_signals(df)
+
         # Simple chart
         fig = go.Figure()
 
@@ -87,9 +91,6 @@ if tab == "📊 View Stock Charts":
         ))
 
         # Add simple moving averages
-        df['SMA_20'] = df['Close'].rolling(window=20).mean()
-        df['SMA_50'] = df['Close'].rolling(window=50).mean()
-
         fig.add_trace(go.Scatter(
             x=df.index,
             y=df['SMA_20'],
@@ -103,6 +104,38 @@ if tab == "📊 View Stock Charts":
             name="50-day average",
             line=dict(color='#FF5252', dash='dash')
         ))
+        
+        # Add Buy signals
+        buy_signals = df[df['Signal'] == 'BUY']
+        if not buy_signals.empty:
+            fig.add_trace(go.Scatter(
+                x=buy_signals.index,
+                y=buy_signals['Close'],
+                mode='markers',
+                name='Buy Signal',
+                marker=dict(
+                    symbol='triangle-up',
+                    size=12,
+                    color='green',
+                    line=dict(width=1, color='darkgreen')
+                )
+            ))
+            
+        # Add Sell signals
+        sell_signals = df[df['Signal'] == 'SELL']
+        if not sell_signals.empty:
+            fig.add_trace(go.Scatter(
+                x=sell_signals.index,
+                y=sell_signals['Close'],
+                mode='markers',
+                name='Sell Signal',
+                marker=dict(
+                    symbol='triangle-down',
+                    size=12,
+                    color='red',
+                    line=dict(width=1, color='darkred')
+                )
+            ))
 
         # Update layout
         fig.update_layout(
@@ -116,12 +149,40 @@ if tab == "📊 View Stock Charts":
 
         st.plotly_chart(fig, use_container_width=True)
 
-        # Simple analysis
-        st.subheader("Simple Analysis")
-        if df['Close'].iloc[-1] > df['SMA_50'].iloc[-1]:
-            st.success("The stock is trading above its 50-day average - this is usually positive.")
-        else:
-            st.warning("The stock is trading below its 50-day average - this might be concerning.")
+        # Signal analysis
+        st.subheader("Technical Analysis")
+        
+        # Display signal strength meter
+        current_signal = df['Signal'].iloc[-1]
+        signal_strength = df['Signal_Strength'].iloc[-1]
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Current Signal", current_signal, delta=f"Strength: {signal_strength:.1f}")
+            
+            # Signal explanation
+            if current_signal == 'BUY':
+                st.success("AI analysis suggests this may be a good time to buy.")
+            elif current_signal == 'SELL':
+                st.warning("AI analysis suggests this may be a good time to sell.")
+            else:
+                st.info("AI analysis suggests holding or no clear signal at this time.")
+                
+        with col2:
+            # Traditional analysis
+            if df['Close'].iloc[-1] > df['SMA_50'].iloc[-1]:
+                st.success("The stock is trading above its 50-day average - this is usually positive.")
+            else:
+                st.warning("The stock is trading below its 50-day average - this might be concerning.")
+            
+            # RSI indicator interpretation
+            if 'RSI' in df.columns:
+                rsi_value = df['RSI'].iloc[-1]
+                st.write(f"RSI: {rsi_value:.1f}")
+                if rsi_value < 30:
+                    st.info("RSI indicates the stock may be oversold.")
+                elif rsi_value > 70:
+                    st.info("RSI indicates the stock may be overbought.")
 
         # Recent news
         st.subheader("Recent News")
